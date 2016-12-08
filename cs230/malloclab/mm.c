@@ -211,9 +211,7 @@ static void *coalesce(void *bp)
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
-    printf("alloc:%d:%d",prev_alloc,next_alloc);
-    printf("alloc:%d:%d",prev_alloc,next_alloc);
-    printf("alloc:%d:%d",prev_alloc,next_alloc);
+    //printf("alloc:%d:%d",prev_alloc,next_alloc);
 
     if(first_linkp == NULL && last_linkp == NULL){
         first_linkp = bp;
@@ -221,13 +219,11 @@ static void *coalesce(void *bp)
     }
 
     if(prev_alloc && next_alloc){           /* Case 1 */
-        printf("case1");
             push_link(first_linkp, bp);
             ////
     }
 
     else if (prev_alloc && !next_alloc){    /* Case 2 */
-        printf("case2");
         remove_link(NEXT_BLKP(bp));
         push_link(first_linkp, bp);
         /////
@@ -237,7 +233,6 @@ static void *coalesce(void *bp)
     }
 
     else if (!prev_alloc && next_alloc){    /* Case 3 */
-        printf("case3");
         remove_link(PREV_BLKP(bp));
         push_link(first_linkp, PREV_BLKP(bp));
         ////
@@ -248,13 +243,12 @@ static void *coalesce(void *bp)
     }
 
     else {                                  /* Case 4 */
-        printf("case4");
         remove_link(PREV_BLKP(bp));
         remove_link(NEXT_BLKP(bp));
         push_link(first_linkp, PREV_BLKP(bp));
         ///
-        size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
-            GET_SIZE(FTRP(NEXT_BLKP(bp)));
+        size += GET_SIZE(FTRP(PREV_BLKP(bp))) +
+            GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
@@ -283,7 +277,6 @@ static void *find_fit(size_t asize)
         }
         bp = NEXT_BLL(bp);
     }
-    printf("endroop");
     return NULL;
 }
 
