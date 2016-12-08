@@ -19,7 +19,7 @@
 #include "memlib.h"
 
 
-#define is_print 1
+#define is_print 0
 
 
 #define ALIGNMENT 8
@@ -85,17 +85,17 @@ int mm_init(void)
     if (is_print)
         printf("i");
     /* Create the initial empty heap */
-    if((heap_listp = mem_sbrk((2*DSIZE)+4*WSIZE)) == (void *)-1){
+    if((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1){
         printf("\nreturn -1\n");
         return -1;
     }
     PUT(heap_listp, 0);                             /* Alignment padding */
-    PUT(heap_listp + (1*WSIZE), PACK(3*DSIZE, 1));    /* Prologue header */
-    PUT(heap_listp + (2*DSIZE) +(2*WSIZE), PACK(3*DSIZE, 1));    /* Prologue footer */
-    PUT(heap_listp + (2*DSIZE) +(3*WSIZE), PACK(0, 1));        /* Epilogue header */
+    PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1));    /* Prologue header */
+    PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1));    /* Prologue footer */
+    PUT(heap_listp + (3*WSIZE), PACK(0, 1));        /* Epilogue header */
     heap_listp += (2*WSIZE);
-    first_linkp = heap_listp;
-    last_linkp = heap_listp;
+    first_linkp = NULL;
+    last_linkp = NULL;
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL){
@@ -112,7 +112,7 @@ int mm_init(void)
 void *mm_malloc(size_t size)
 {
     if (is_print)
-        printf("\nm\n");
+        printf("\nmalloc:%p:%p\n",first_linkp,last_linkp);
     size_t asize;       /* Adjusted block size */
     size_t extendsize;  /* Amount to extend heap if no fit */
     char *bp;
@@ -123,9 +123,9 @@ void *mm_malloc(size_t size)
     
     /* Adjust block size to include overhead and alignement reqs. */
     if(size <= 2*DSIZE)
-        asize = 4*DSIZE;
+        asize = 3*DSIZE;
     else
-        asize = DSIZE * ((size + (3*DSIZE) + (DSIZE-1)) / DSIZE);
+        asize = DSIZE * ((size + (DSIZE) + (DSIZE-1)) / DSIZE);
 
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL){
@@ -148,17 +148,12 @@ void *mm_malloc(size_t size)
 void mm_free(void *bp)
 {
     if (is_print)
-        printf("\nf%p\n",bp);
+        printf("\nfree%p\n",bp);
     size_t size = GET_SIZE(HDRP(bp));
     
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
 
-    if(first_linkp == NULL){
-        printf("\nfree :0\n");
-        first_linkp = bp;
-        last_linkp = bp;
-    }
     coalesce(bp);
 }
 
@@ -168,7 +163,7 @@ void mm_free(void *bp)
 void *mm_realloc(void *bp, size_t size)
 {
     if (is_print)
-        printf("r");
+        printf("realloc");
     void *oldbp = bp;
     void *newbp;
     size_t copySize;
@@ -188,7 +183,7 @@ void *mm_realloc(void *bp, size_t size)
 static void *extend_heap(size_t words)
 {
     if (is_print)
-        printf("e");
+        printf("extend ");
     char *bp;
     size_t size;
 
@@ -212,18 +207,27 @@ static void *extend_heap(size_t words)
 static void *coalesce(void *bp)
 {
     if (is_print)
-        printf("c");
+        printf("coal ");
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
+    printf("alloc:%d:%d",prev_alloc,next_alloc);
+    printf("alloc:%d:%d",prev_alloc,next_alloc);
+    printf("alloc:%d:%d",prev_alloc,next_alloc);
+
+    if(first_linkp == NULL && last_linkp == NULL){
+        first_linkp = bp;
+        last_linkp = bp;
+    }
 
     if(prev_alloc && next_alloc){           /* Case 1 */
+        printf("case1");
             push_link(first_linkp, bp);
             ////
-            return bp;
     }
 
     else if (prev_alloc && !next_alloc){    /* Case 2 */
+        printf("case2");
         remove_link(NEXT_BLKP(bp));
         push_link(first_linkp, bp);
         /////
@@ -233,6 +237,7 @@ static void *coalesce(void *bp)
     }
 
     else if (!prev_alloc && next_alloc){    /* Case 3 */
+        printf("case3");
         remove_link(PREV_BLKP(bp));
         push_link(first_linkp, PREV_BLKP(bp));
         ////
@@ -243,6 +248,7 @@ static void *coalesce(void *bp)
     }
 
     else {                                  /* Case 4 */
+        printf("case4");
         remove_link(PREV_BLKP(bp));
         remove_link(NEXT_BLKP(bp));
         push_link(first_linkp, PREV_BLKP(bp));
@@ -261,17 +267,14 @@ static void *coalesce(void *bp)
 static void *find_fit(size_t asize)
 {
     if (is_print)
-        printf("i");
+        printf("find ");
 
     /* First-fit search */
     char *bp;
 
     bp = first_linkp;
-    if(bp == last_linkp){
-        return NULL;
-    }
-    bp = NEXT_BLL(bp);
     while(bp!=NULL){
+        //printf("roop%p:%p:%p:%p\n",bp,first_linkp,NEXT_BLL(first_linkp),last_linkp);
         if(asize<= GET_SIZE(HDRP(bp))){
             return bp;
         }
@@ -280,17 +283,18 @@ static void *find_fit(size_t asize)
         }
         bp = NEXT_BLL(bp);
     }
-    return NULL; 
+    printf("endroop");
+    return NULL;
 }
 
 static void place(void *bp, size_t asize)
 {
     if (is_print)
-        printf("p");
+        printf("place ");
     size_t csize= GET_SIZE(HDRP(bp));
     char *oldbp = bp;
     char *newbp;
-    if((csize - asize) >= (4*DSIZE)) {
+    if((csize - asize) >= (3*DSIZE)) {
         PUT(HDRP(oldbp), PACK(asize, 1));
         PUT(FTRP(oldbp), PACK(asize, 1));
         newbp = NEXT_BLKP(oldbp);
@@ -298,19 +302,24 @@ static void place(void *bp, size_t asize)
             printf("newbp%p:size:%d",newbp,asize);
         PUT(HDRP(newbp), PACK(csize-asize, 0));
         PUT(FTRP(newbp), PACK(csize-asize, 0));
+        
         if(oldbp == first_linkp && oldbp == last_linkp){
             first_linkp = newbp;
             last_linkp = newbp;
         }
         else if(oldbp == first_linkp){
+            
             PUTA(NEXTP(newbp), NEXT_BLL(oldbp));
+            PUTA(PREVP(newbp), NULL);
             PUTA(PREVP(NEXT_BLL(oldbp)), newbp);
             first_linkp = newbp;
+            
 
         }
         else if(oldbp == last_linkp){
             PUTA(NEXTP(PREV_BLL(oldbp)), newbp);
             PUTA(PREVP(newbp), PREV_BLL(oldbp));
+            PUTA(NEXTP(newbp),NULL);
             last_linkp = newbp;
         }
         else{
@@ -331,15 +340,16 @@ static void place(void *bp, size_t asize)
 static void push_link(void *bp, void *ibp)
 {
     if(is_print)
-        printf("l");
+        printf("pushlink ");
     if (bp == NULL && first_linkp == NULL){
-        first_linkp = bp;
-        last_linkp = bp;
+        first_linkp = ibp;
+        last_linkp = ibp;
     }
     else if(bp == last_linkp){
         PUTA(NEXTP(bp), ibp);
         PUTA(PREVP(ibp), bp);
         last_linkp = ibp;
+        PUTA(NEXTP(ibp), NULL);
     }
     else{
         PUTA(NEXTP(ibp), NEXT_BLL(bp));
@@ -353,20 +363,19 @@ static void push_link(void *bp, void *ibp)
 static void remove_link(void *bp)
 {
     if(is_print)
-        printf("m");
+        printf("remvelink ");
     if(bp == first_linkp && bp == last_linkp){
-        if (is_print)
-            printf("remove link with null!!!!!!");
         first_linkp = NULL;
-        printf("\n!\n");
         last_linkp = NULL;
     }
     else if(bp == first_linkp){
         first_linkp = NEXT_BLL(bp);
-
+        PUTA(PREVP(NEXT_BLL(bp)), NULL);
+        
     }
     else if(bp == last_linkp){
         last_linkp = PREV_BLL(bp);
+        PUTA(NEXTP(PREV_BLL(bp)), NULL);
     }
     else{
         PUTA(NEXTP(PREV_BLL(bp)), NEXT_BLL(bp));
